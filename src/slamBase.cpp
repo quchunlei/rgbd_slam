@@ -71,25 +71,36 @@ RESULT_OF_PNP estimateMotion(FRAME& frame1, FRAME& frame2, CAMERA_INTRINSIC_PARA
   cv::BFMatcher matcher;
   matcher.match(frame1.desp, frame2.desp, matches);
   
-  
-  cout<<"Find total "<<matches.size()<<" matches."<<endl;
+  RESULT_OF_PNP result;
+  //cout<<"Find total "<<matches.size()<<" matches."<<endl;
   vector< cv::DMatch > goodMatches;
   double mindis=9999;
+  double good_match_threshold = atof(pd.getData("good_match_threshold").c_str());
   for( size_t i=0; i<matches.size(); ++i)
   {
     if(matches[i].distance < mindis)
       mindis = matches[i].distance;
   }
   
+  cout<<"min dis = "<<mindis<<endl;
+  if(mindis<10)
+     mindis=10;
+
   for( size_t i=0; i< matches.size(); ++i)
   {
-    if(matches[i].distance< 10*mindis)
+    if(matches[i].distance< good_match_threshold*mindis)
       goodMatches.push_back(matches[i]);
   }
-  
-  
+
+
   cout<<"good matches="<<goodMatches.size()<<endl;
   
+  if(goodMatches.size()<=5)
+  {
+    result.inliers =-1;
+    return result;
+  }
+
   vector<cv::Point3f> pts_obj;
   vector<cv::Point2f> pts_img;
   
@@ -107,6 +118,12 @@ RESULT_OF_PNP estimateMotion(FRAME& frame1, FRAME& frame2, CAMERA_INTRINSIC_PARA
     pts_obj.push_back(pd);
   }
   
+  if(pts_img.size() == 0|| pts_obj.size() == 0)
+  {
+    result.inliers = -1;
+    return result;
+  }
+
   double camera_matrix_data[3][3]
   {
     {camera.fx, 0, camera.cx},
@@ -114,12 +131,12 @@ RESULT_OF_PNP estimateMotion(FRAME& frame1, FRAME& frame2, CAMERA_INTRINSIC_PARA
     {0, 0, 1}
   };
   
-  cout<<"solving pnp"<<endl;
+  //构建相机矩阵
   cv::Mat cameraMatrix(3,3,CV_64F,camera_matrix_data);
   cv::Mat rvec, tvec, inliers;
-  
+  cout<<"solving pnp"<<endl;
   cv::solvePnPRansac(pts_obj, pts_img, cameraMatrix, cv::Mat(), rvec, tvec, false, 100, 1.0, 100, inliers);
-  RESULT_OF_PNP result;
+
   result.rvec = rvec;
   result.tvec = tvec;
   result.inliers = inliers.rows;
